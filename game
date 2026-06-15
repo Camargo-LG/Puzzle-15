@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quebra-Cabeça 15</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'Segoe UI',sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);
+    padding:20px;
+}
+
+.container{
+    width:min(420px,95vw);
+    background:rgba(255,255,255,.08);
+    backdrop-filter:blur(15px);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:24px;
+    padding:28px;
+    text-align:center;
+    box-shadow:0 25px 70px rgba(0,0,0,.4);
+}
+
+h1{
+    color:white;
+    margin-bottom:8px;
+}
+
+.subtitle{
+    color:rgba(255,255,255,.5);
+    margin-bottom:20px;
+    font-size:.85rem;
+}
+
+.stats{
+    display:flex;
+    gap:10px;
+    margin-bottom:20px;
+}
+
+.stat{
+    flex:1;
+    background:rgba(255,255,255,.08);
+    border-radius:12px;
+    padding:10px;
+}
+
+.stat-label{
+    color:rgba(255,255,255,.5);
+    font-size:.7rem;
+    text-transform:uppercase;
+}
+
+.stat-value{
+    color:white;
+    font-size:1.3rem;
+    font-weight:700;
+}
+
+.board{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+    padding:10px;
+    background:rgba(0,0,0,.2);
+    border-radius:18px;
+    aspect-ratio:1;
+    margin-bottom:18px;
+}
+
+.tile{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:1.5rem;
+    font-weight:800;
+    color:white;
+    border-radius:12px;
+    cursor:pointer;
+    user-select:none;
+    transition:.15s;
+    text-shadow:0 2px 5px rgba(0,0,0,.3);
+}
+
+.tile:hover:not(.empty){
+    transform:scale(.95);
+}
+
+.tile.empty{
+    background:rgba(255,255,255,.05);
+    cursor:default;
+}
+
+.buttons{
+    display:flex;
+    gap:10px;
+}
+
+button{
+    flex:1;
+    padding:12px;
+    border:none;
+    border-radius:12px;
+    cursor:pointer;
+    color:white;
+    font-weight:600;
+    background:rgba(255,255,255,.12);
+    transition:.2s;
+}
+
+button:hover{
+    transform:translateY(-2px);
+}
+
+.primary{
+    background:linear-gradient(135deg,#8b5cf6,#6366f1);
+}
+
+.win{
+    display:none;
+    margin-top:16px;
+    padding:14px;
+    border-radius:14px;
+    color:white;
+    background:rgba(34,197,94,.18);
+    border:1px solid rgba(34,197,94,.4);
+}
+
+.hint{
+    margin-top:15px;
+    color:rgba(255,255,255,.35);
+    font-size:.75rem;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🧩 Quebra-Cabeça</h1>
+<p class="subtitle">Organize as peças de 1 a 15</p>
+
+<div class="stats">
+
+<div class="stat">
+<div class="stat-label">Movimentos</div>
+<div class="stat-value" id="moves">0</div>
+</div>
+
+<div class="stat">
+<div class="stat-label">Tempo</div>
+<div class="stat-value" id="timer">0:00</div>
+</div>
+
+<div class="stat">
+<div class="stat-label">Recorde</div>
+<div class="stat-value" id="best">—</div>
+</div>
+
+</div>
+
+<div class="board" id="board"></div>
+
+<div class="buttons">
+<button class="primary" onclick="shuffle()">🔀 Embaralhar</button>
+<button onclick="resetGame()">🔄 Resetar</button>
+</div>
+
+<div class="win" id="win"></div>
+
+<p class="hint">Use mouse ou ← ↑ ↓ →</p>
+
+</div>
+
+<script>
+
+const COLORS = [
+'linear-gradient(135deg,#f97316,#ef4444)',
+'linear-gradient(135deg,#a855f7,#6366f1)',
+'linear-gradient(135deg,#06b6d4,#3b82f6)',
+'linear-gradient(135deg,#22c55e,#14b8a6)'
+];
+
+let board;
+let moves;
+let timer;
+let started;
+let won;
+let interval;
+
+let bestMoves =
+parseInt(localStorage.getItem('bestMoves')) || null;
+
+let bestTime =
+parseInt(localStorage.getItem('bestTime')) || null;
+
+function initBoard(){
+    board=[
+        1,2,3,4,
+        5,6,7,8,
+        9,10,11,12,
+        13,14,15,0
+    ];
+}
+
+function updateBestDisplay(){
+    if(bestMoves){
+        document.getElementById("best").textContent = bestMoves;
+    }
+
+    if(bestTime && (!bestMoves)){
+        document.getElementById("best").textContent =
+            formatTime(bestTime);
+    }
+}
+
+function render(){
+
+    const boardEl = document.getElementById("board");
+    boardEl.innerHTML='';
+
+    board.forEach((value,index)=>{
+
+        const tile=document.createElement('div');
+
+        tile.className='tile';
+
+        if(value===0){
+            tile.classList.add('empty');
+        }else{
+            tile.textContent=value;
+            tile.style.background=
+            COLORS[Math.floor((value-1)/4)];
+
+            tile.onclick=()=>move(index);
+        }
+
+        boardEl.appendChild(tile);
+    });
+
+}
+
+function startTimer(){
+
+    if(started) return;
+
+    started=true;
+
+    interval=setInterval(()=>{
+
+        if(!won){
+
+            timer++;
+
+            document.getElementById('timer')
+            .textContent=formatTime(timer);
+
+        }
+
+    },1000);
+
+}
+
+function formatTime(seconds){
+
+    const m=Math.floor(seconds/60);
+    const s=seconds%60;
+
+    return `${m}:${String(s).padStart(2,'0')}`;
+
+}
+
+function move(index){
+
+    if(won) return;
+
+    const empty=board.indexOf(0);
+
+    const r=Math.floor(index/4);
+    const c=index%4;
+
+    const er=Math.floor(empty/4);
+    const ec=empty%4;
+
+    const valid=
+        (Math.abs(r-er)===1 && c===ec)
+        ||
+        (Math.abs(c-ec)===1 && r===er);
+
+    if(!valid) return;
+
+    startTimer();
+
+    [board[index],board[empty]]=
+    [board[empty],board[index]];
+
+    moves++;
+
+    document.getElementById('moves').textContent=moves;
+
+    render();
+
+    checkWin();
+
+}
+
+function checkWin(){
+
+    for(let i=0;i<15;i++){
+
+        if(board[i]!==i+1){
+            return;
+        }
+
+    }
+
+    won=true;
+
+    clearInterval(interval);
+
+    if(!bestMoves || moves<bestMoves){
+
+        bestMoves=moves;
+
+        localStorage.setItem(
+            'bestMoves',
+            moves
+        );
+
+    }
+
+    if(!bestTime || timer<bestTime){
+
+        bestTime=timer;
+
+        localStorage.setItem(
+            'bestTime',
+            timer
+        );
+
+    }
+
+    updateBestDisplay();
+
+    document.getElementById('win').style.display='block';
+
+    document.getElementById('win').innerHTML=
+        `🎉 Parabéns!<br>
+        ${moves} movimentos<br>
+        Tempo: ${formatTime(timer)}`;
+
+}
+
+function shuffle(){
+
+    initBoard();
+
+    let empty=15;
+
+    for(let i=0;i<500;i++){
+
+        const possible=[];
+
+        const row=Math.floor(empty/4);
+        const col=empty%4;
+
+        if(row>0) possible.push(empty-4);
+        if(row<3) possible.push(empty+4);
+        if(col>0) possible.push(empty-1);
+        if(col<3) possible.push(empty+1);
+
+        const next=
+        possible[Math.floor(Math.random()*possible.length)];
+
+        [board[empty],board[next]]=
+        [board[next],board[empty]];
+
+        empty=next;
+    }
+
+    moves=0;
+    timer=0;
+    started=false;
+    won=false;
+
+    clearInterval(interval);
+
+    document.getElementById('moves').textContent='0';
+    document.getElementById('timer').textContent='0:00';
+    document.getElementById('win').style.display='none';
+
+    render();
+}
+
+function resetGame(){
+
+    initBoard();
+
+    moves=0;
+    timer=0;
+    started=false;
+    won=false;
+
+    clearInterval(interval);
+
+    document.getElementById('moves').textContent='0';
+    document.getElementById('timer').textContent='0:00';
+    document.getElementById('win').style.display='none';
+
+    render();
+}
+
+document.addEventListener('keydown',(e)=>{
+
+    const empty=board.indexOf(0);
+
+    const row=Math.floor(empty/4);
+    const col=empty%4;
+
+    let target=-1;
+
+    if(e.key==='ArrowUp' && row<3)
+        target=empty+4;
+
+    if(e.key==='ArrowDown' && row>0)
+        target=empty-4;
+
+    if(e.key==='ArrowLeft' && col<3)
+        target=empty+1;
+
+    if(e.key==='ArrowRight' && col>0)
+        target=empty-1;
+
+    if(target>=0){
+
+        e.preventDefault();
+
+        move(target);
+
+    }
+
+});
+
+initBoard();
+updateBestDisplay();
+render();
+
+</script>
+
+</body>
+</html>
